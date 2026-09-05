@@ -1,0 +1,443 @@
+name: Release Treehouse
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver version without v prefix (example: 0.1.0)"
+        required: true
+        type: string
+
+jobs:
+  resolve-meta:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      binary_name: ${{ steps.meta.outputs.binary_name }}
+      cask_name: ${{ steps.meta.outputs.cask_name }}
+      formula_name: ${{ steps.meta.outputs.formula_name }}
+      formula_class: ${{ steps.meta.outputs.formula_class }}
+      formula_desc: ${{ steps.meta.outputs.formula_desc }}
+      ldflags_pkg: ${{ steps.meta.outputs.ldflags_pkg }}
+      main_pkg: ${{ steps.meta.outputs.main_pkg }}
+      release_title: ${{ steps.meta.outputs.release_title }}
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      homepage: ${{ steps.meta.outputs.homepage }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            VERSION="${INPUT_VERSION}"
+          else
+            RAW_TAG="${GITHUB_REF_NAME}"
+            VERSION="${RAW_TAG#v}"
+          fi
+
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+            echo "Invalid version: ${VERSION}" >&2
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "binary_name=treehouse" >> "$GITHUB_OUTPUT"
+          echo "cask_name=treehouse" >> "$GITHUB_OUTPUT"
+          echo "formula_name=treehouse-cli" >> "$GITHUB_OUTPUT"
+          echo "formula_class=TreehouseCli" >> "$GITHUB_OUTPUT"
+          echo "formula_desc=Headless git worktree/diff sync daemon for Treehouse" >> "$GITHUB_OUTPUT"
+          echo "ldflags_pkg=github.com/cloptima/cloptima-treehouse/internal/cli.version" >> "$GITHUB_OUTPUT"
+          echo "main_pkg=./cmd/treehouse" >> "$GITHUB_OUTPUT"
+          echo "release_title=Treehouse" >> "$GITHUB_OUTPUT"
+          echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "homepage=https://treehouse.cloptima.ai" >> "$GITHUB_OUTPUT"
+
+  build-linux:
+    needs: resolve-meta
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Verify formatting
+        run: |
+          unformatted="$(gofmt -l cmd internal 2>/dev/null || gofmt -l .)"
+          if [ -n "${unformatted}" ]; then
+            echo "gofmt needed for:"
+            echo "${unformatted}"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - name: Build Linux archives
+        env:
+          VERSION: ${{ needs.resolve-meta.outputs.version }}
+          BINARY_NAME: ${{ needs.resolve-meta.outputs.binary_name }}
+          FORMULA_NAME: ${{ needs.resolve-meta.outputs.formula_name }}
+          LDFLAGS_PKG: ${{ needs.resolve-meta.outputs.ldflags_pkg }}
+          MAIN_PKG: ${{ needs.resolve-meta.outputs.main_pkg }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist-linux
+          mkdir -p dist-linux
+
+          TARGETS=(
+            "linux amd64"
+            "linux arm64"
+          )
+
+          for target in "${TARGETS[@]}"; do
+            read -r GOOS GOARCH <<< "${target}"
+            OUT_DIR="dist-linux/${GOOS}_${GOARCH}"
+            mkdir -p "${OUT_DIR}"
+
+            CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
+              go build \
+                -trimpath \
+                -buildvcs=false \
+                -ldflags "-s -w -X ${LDFLAGS_PKG}=${VERSION}" \
+                -o "${OUT_DIR}/${BINARY_NAME}" \
+                ${MAIN_PKG}
+
+            ARCHIVE="dist-linux/${FORMULA_NAME}_${VERSION}_${GOOS}_${GOARCH}.tar.gz"
+            tar -C "${OUT_DIR}" -czf "${ARCHIVE}" "${BINARY_NAME}"
+          done
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dist-linux
+          path: dist-linux/*.tar.gz
+
+  build-darwin:
+    needs: resolve-meta
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Build Darwin archives and macOS App
+        env:
+          VERSION: ${{ needs.resolve-meta.outputs.version }}
+          BINARY_NAME: ${{ needs.resolve-meta.outputs.binary_name }}
+          FORMULA_NAME: ${{ needs.resolve-meta.outputs.formula_name }}
+          LDFLAGS_PKG: ${{ needs.resolve-meta.outputs.ldflags_pkg }}
+          MAIN_PKG: ${{ needs.resolve-meta.outputs.main_pkg }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist-darwin
+          mkdir -p dist-darwin
+
+          # macOS 13 is the floor for all Cloptima darwin binaries (Treehouse.app
+          # needs it for SMAppService / Launch at Login).
+
+          # Build darwin/arm64 with native CGO
+          OUT_ARM64="dist-darwin/darwin_arm64"
+          mkdir -p "${OUT_ARM64}"
+          CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 \
+          CGO_CFLAGS="-mmacosx-version-min=13.0" \
+          CGO_LDFLAGS="-mmacosx-version-min=13.0" \
+            go build \
+              -trimpath \
+              -buildvcs=false \
+              -ldflags "-s -w -X ${LDFLAGS_PKG}=${VERSION}" \
+              -o "${OUT_ARM64}/${BINARY_NAME}" \
+              ${MAIN_PKG}
+
+          # Build darwin/amd64 with target clang CGO cross-compilation
+          OUT_AMD64="dist-darwin/darwin_amd64"
+          mkdir -p "${OUT_AMD64}"
+          CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 CC="clang -target x86_64-apple-macos13" \
+            go build \
+              -trimpath \
+              -buildvcs=false \
+              -ldflags "-s -w -X ${LDFLAGS_PKG}=${VERSION}" \
+              -o "${OUT_AMD64}/${BINARY_NAME}" \
+              ${MAIN_PKG}
+
+          for arch in "arm64" "amd64"; do
+            ARCH_DIR="dist-darwin/darwin_${arch}"
+            APP_DIR="${ARCH_DIR}/Treehouse.app"
+            mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
+            cp "${ARCH_DIR}/${BINARY_NAME}" "${APP_DIR}/Contents/MacOS/${BINARY_NAME}"
+            sed "s/VERSION/${VERSION}/g" assets/Info.plist > "${APP_DIR}/Contents/Info.plist"
+            if [[ -f assets/AppIcon.icns ]]; then
+              cp assets/AppIcon.icns "${APP_DIR}/Contents/Resources/AppIcon.icns"
+            fi
+
+            # Ad-hoc signing: stable code signature for TCC permissions
+            codesign --force --sign - --identifier ai.cloptima.treehouse \
+              -r='designated => identifier "ai.cloptima.treehouse"' \
+              --timestamp=none "${APP_DIR}/Contents/MacOS/${BINARY_NAME}"
+            codesign --force --sign - --identifier ai.cloptima.treehouse \
+              -r='designated => identifier "ai.cloptima.treehouse"' \
+              --timestamp=none "${APP_DIR}"
+            codesign --verify --strict --verbose=2 "${APP_DIR}"
+
+            ditto -c -k --keepParent "${APP_DIR}" "dist-darwin/Treehouse_${VERSION}_darwin_${arch}.zip"
+
+            ARCHIVE="dist-darwin/${FORMULA_NAME}_${VERSION}_darwin_${arch}.tar.gz"
+            tar -C "${ARCH_DIR}" -czf "${ARCHIVE}" "${BINARY_NAME}"
+          done
+
+      - name: Upload Darwin artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dist-darwin
+          path: |
+            dist-darwin/*.tar.gz
+            dist-darwin/*.zip
+
+  publish:
+    needs: [resolve-meta, build-linux, build-darwin]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      TARGET_REPO: cloptima/cloptima-treehouse
+      TAP_REPO: cloptima/homebrew-tap
+      VERSION: ${{ needs.resolve-meta.outputs.version }}
+      TAG: ${{ needs.resolve-meta.outputs.release_tag }}
+      TITLE: ${{ needs.resolve-meta.outputs.release_title }}
+      BINARY_NAME: ${{ needs.resolve-meta.outputs.binary_name }}
+      CASK_NAME: ${{ needs.resolve-meta.outputs.cask_name }}
+      FORMULA_NAME: ${{ needs.resolve-meta.outputs.formula_name }}
+      FORMULA_CLASS: ${{ needs.resolve-meta.outputs.formula_class }}
+      FORMULA_DESC: ${{ needs.resolve-meta.outputs.formula_desc }}
+      HOMEPAGE: ${{ needs.resolve-meta.outputs.homepage }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: dist-linux
+          path: dist
+
+      - name: Download Darwin artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: dist-darwin
+          path: dist
+
+      - name: Generate Checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd dist
+          FILES=(*.tar.gz)
+          if compgen -G "*.zip" > /dev/null; then
+            FILES+=(*.zip)
+          fi
+          sha256sum "${FILES[@]}" > checksums.txt
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@f8d387b68d61c58ab83c6c016672934102569859
+        with:
+          app-id: ${{ secrets.CLOPTIMA_RELEASE_APP_ID }}
+          private-key: ${{ secrets.CLOPTIMA_RELEASE_APP_PRIVATE_KEY }}
+          owner: cloptima
+          repositories: |
+            cloptima-treehouse
+            homebrew-tap
+
+      - name: Publish artifacts to GitHub release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat <<EOF > release-notes.md
+          Automated release for Treehouse ${TAG}
+
+          ## Install
+
+          Menu bar app (macOS):
+
+          \`\`\`bash
+          brew install --cask cloptima/tap/${CASK_NAME}
+          \`\`\`
+
+          Headless daemon / CLI (macOS & Linux):
+
+          \`\`\`bash
+          brew install cloptima/tap/${FORMULA_NAME}
+          \`\`\`
+
+          ### Manual ZIP Installation (macOS)
+
+          Treehouse.app is ad-hoc signed for Launch at Login. If installing the downloaded \`.zip\` manually rather than through Homebrew, clear the Gatekeeper quarantine flag before first launch:
+
+          \`\`\`bash
+          xattr -dr com.apple.quarantine /Applications/Treehouse.app
+          \`\`\`
+          EOF
+
+          gh release view "${TAG}" -R "${TARGET_REPO}" >/dev/null 2>&1 || \
+            gh release create "${TAG}" \
+              -R "${TARGET_REPO}" \
+              --verify-tag \
+              --title "${TITLE} ${TAG}" \
+              --notes-file release-notes.md
+
+          gh release upload "${TAG}" \
+            dist/* \
+            -R "${TARGET_REPO}" \
+            --clobber
+
+      - name: Update homebrew formula and cask
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SHA_DARWIN_AMD64=$(sha256sum "dist/${FORMULA_NAME}_${VERSION}_darwin_amd64.tar.gz" | awk '{print $1}')
+          SHA_DARWIN_ARM64=$(sha256sum "dist/${FORMULA_NAME}_${VERSION}_darwin_arm64.tar.gz" | awk '{print $1}')
+          SHA_LINUX_AMD64=$(sha256sum "dist/${FORMULA_NAME}_${VERSION}_linux_amd64.tar.gz" | awk '{print $1}')
+          SHA_LINUX_ARM64=$(sha256sum "dist/${FORMULA_NAME}_${VERSION}_linux_arm64.tar.gz" | awk '{print $1}')
+
+          URL_BASE="https://github.com/${TARGET_REPO}/releases/download/${TAG}"
+
+          TEMP_DIR=$(mktemp -d)
+          trap 'rm -rf "${TEMP_DIR}"' EXIT
+          gh repo clone "${TAP_REPO}" "${TEMP_DIR}/tap"
+          gh auth setup-git
+
+          mkdir -p "${TEMP_DIR}/tap/Formula"
+          cat > "${TEMP_DIR}/tap/Formula/${FORMULA_NAME}.rb" <<EOF
+          class ${FORMULA_CLASS} < Formula
+            desc "${FORMULA_DESC}"
+            homepage "${HOMEPAGE}"
+            version "${VERSION}"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "${URL_BASE}/${FORMULA_NAME}_${VERSION}_darwin_arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              else
+                url "${URL_BASE}/${FORMULA_NAME}_${VERSION}_darwin_amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "${URL_BASE}/${FORMULA_NAME}_${VERSION}_linux_arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "${URL_BASE}/${FORMULA_NAME}_${VERSION}_linux_amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install "${BINARY_NAME}"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/${BINARY_NAME} version")
+            end
+          end
+          EOF
+
+          SHA_APP_ARM64=$(sha256sum "dist/Treehouse_${VERSION}_darwin_arm64.zip" | awk '{print $1}')
+          SHA_APP_AMD64=$(sha256sum "dist/Treehouse_${VERSION}_darwin_amd64.zip" | awk '{print $1}')
+
+          mkdir -p "${TEMP_DIR}/tap/Casks"
+          cat > "${TEMP_DIR}/tap/Casks/${CASK_NAME}.rb" <<EOF
+          cask "${CASK_NAME}" do
+            arch arm: "arm64", intel: "amd64"
+
+            version "${VERSION}"
+            sha256 arm:   "${SHA_APP_ARM64}",
+                   intel: "${SHA_APP_AMD64}"
+
+            url "${URL_BASE}/Treehouse_#{version}_darwin_#{arch}.zip"
+            name "Treehouse"
+            desc "Live git worktree/diff overview menu bar app"
+            homepage "${HOMEPAGE}/"
+
+            depends_on macos: :ventura
+
+            app "Treehouse.app"
+            binary "#{appdir}/Treehouse.app/Contents/MacOS/treehouse"
+
+            postflight do
+              system "xattr", "-r", "-d", "com.apple.quarantine", "#{appdir}/Treehouse.app"
+            end
+
+            uninstall quit: "ai.cloptima.treehouse"
+
+            zap trash: [
+              "~/.treehouse",
+              "~/Library/Saved Application State/ai.cloptima.treehouse.savedState",
+            ]
+          end
+          EOF
+
+          cd "${TEMP_DIR}/tap"
+          DEFAULT_BRANCH=$(git remote show origin | sed -n '/HEAD branch/s/.*: //p')
+          if [[ -z "${DEFAULT_BRANCH}" ]]; then
+            DEFAULT_BRANCH="master"
+          fi
+
+          git checkout "${DEFAULT_BRANCH}"
+          git config user.name "cloptima-release-private-app[bot]"
+          git config user.email "265643135+cloptima-release-private-app[bot]@users.noreply.github.com"
+          git add "Formula/${FORMULA_NAME}.rb" "Casks/${CASK_NAME}.rb"
+
+          if git diff --cached --quiet; then
+            echo "No formula or cask changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: bump ${FORMULA_NAME} and ${CASK_NAME} to ${VERSION}"
+          git push origin "HEAD:${DEFAULT_BRANCH}"

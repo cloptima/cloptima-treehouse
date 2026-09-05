@@ -1,0 +1,14 @@
+# Binaries
+/treehouse
+bin/
+dist/
+dist-*/
+
+# OS & Editor files
+.DS_Store
+.vscode/
+.idea/
+
+# Test artifacts
+*.test
+coverage.out

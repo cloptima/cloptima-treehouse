@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>treehouse</string>
+	<key>CFBundleIdentifier</key>
+	<string>ai.cloptima.treehouse</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Treehouse</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>VERSION</string>
+	<key>CFBundleVersion</key>
+	<string>VERSION</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Treehouse requires access to monitor Git repositories located on your Desktop.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Treehouse requires access to monitor Git repositories located in your Documents folder.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Treehouse requires access to monitor Git repositories located in your Downloads folder.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2026 Cloptima AI. All rights reserved.</string>
+</dict>
+</plist>
