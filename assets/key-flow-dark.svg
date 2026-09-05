@@ -1,0 +1,101 @@
+<svg viewBox="0 0 1180 620" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="arrowGrey" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#58a6ff"/>
+    </marker>
+  </defs>
+
+  <rect x="8" y="8" width="1164" height="552" rx="16" fill="#161b22" stroke="#30363d"/>
+
+  <!-- Column backgrounds -->
+  <rect x="30" y="60" width="340" height="470" rx="14" fill="#1c2128" stroke="#30363d"/>
+  <rect x="420" y="60" width="340" height="470" rx="14" fill="#1c2128" stroke="#30363d"/>
+  <rect x="810" y="60" width="340" height="470" rx="14" fill="#1c2128" stroke="#30363d"/>
+
+  <!-- Column titles -->
+  <text x="200" y="42" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Your machine &#183; daemon</text>
+  <text x="590" y="42" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Cloptima</text>
+  <text x="980" y="42" text-anchor="middle" font-size="15" font-weight="600" fill="#e6edf3">Your device &#183; browser</text>
+
+  <!-- Column 1: daemon -->
+  <rect x="60" y="90" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="200" y="118" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Machine key &#183; 32 random bytes</text>
+  <text x="200" y="136" text-anchor="middle" font-size="11" fill="#8b949e">generated locally &#183; OS keychain</text>
+
+  <line x1="200" y1="156" x2="200" y2="216" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <text x="222" y="180" font-size="9.5" fill="#8b949e">HKDF-SHA256, keyed by</text>
+  <text x="222" y="192" font-size="9.5" fill="#8b949e">repo + worktree path</text>
+
+  <rect x="60" y="220" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="200" y="248" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Worktree key</text>
+  <text x="200" y="266" text-anchor="middle" font-size="11" fill="#8b949e">one per repo + worktree</text>
+
+  <line x1="200" y1="286" x2="200" y2="346" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <text x="222" y="310" font-size="9.5" fill="#8b949e">AES-256-GCM</text>
+  <text x="222" y="322" font-size="9.5" fill="#8b949e">over the gzipped diff</text>
+
+  <rect x="60" y="350" width="280" height="66" rx="10" fill="#0d2a3d" stroke="#58a6ff"/>
+  <text x="200" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="#a5d8ff">Sealed diff</text>
+  <text x="200" y="396" text-anchor="middle" font-size="11" fill="#a5d8ff">ciphertext &#183; nonce &#183; auth tag</text>
+
+  <text x="200" y="450" text-anchor="middle" font-size="10.5" font-style="italic" fill="#6e7681">The machine key never leaves this box.</text>
+
+  <!-- Column 2: relay -->
+  <rect x="450" y="220" width="280" height="66" rx="10" fill="#0d2a3d" stroke="#58a6ff"/>
+  <text x="590" y="248" text-anchor="middle" font-size="13" font-weight="600" fill="#a5d8ff">Wrapped machine keys</text>
+  <text x="590" y="266" text-anchor="middle" font-size="11" fill="#a5d8ff">one per device, per machine</text>
+
+  <rect x="450" y="350" width="280" height="66" rx="10" fill="#0d2a3d" stroke="#58a6ff"/>
+  <text x="590" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="#a5d8ff">Sealed diffs</text>
+  <text x="590" y="396" text-anchor="middle" font-size="11" fill="#a5d8ff">ciphertext only</text>
+
+  <text x="590" y="450" text-anchor="middle" font-size="10.5" font-style="italic" fill="#6e7681">Opaque bytes either way. No key here opens one.</text>
+
+  <!-- Column 3: device -->
+  <rect x="840" y="90" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="980" y="118" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Device key pair &#183; P-256</text>
+  <text x="980" y="136" text-anchor="middle" font-size="11" fill="#8b949e">non-extractable, in-browser</text>
+
+  <line x1="980" y1="156" x2="980" y2="216" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <text x="1002" y="180" font-size="9.5" fill="#8b949e">ECDH unwrap</text>
+
+  <rect x="840" y="220" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="980" y="248" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Machine key, recovered</text>
+  <text x="980" y="266" text-anchor="middle" font-size="11" fill="#8b949e">via ECDH unwrap</text>
+
+  <line x1="980" y1="286" x2="980" y2="346" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <text x="1002" y="310" font-size="9.5" fill="#8b949e">same HKDF,</text>
+  <text x="1002" y="322" font-size="9.5" fill="#8b949e">same paths</text>
+
+  <rect x="840" y="350" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="980" y="378" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Worktree key</text>
+  <text x="980" y="396" text-anchor="middle" font-size="11" fill="#8b949e">same HKDF derivation</text>
+
+  <line x1="980" y1="416" x2="980" y2="476" stroke="#8b949e" stroke-width="1.5" marker-end="url(#arrowGrey)"/>
+  <text x="1002" y="440" font-size="9.5" fill="#8b949e">AES-256-GCM open,</text>
+  <text x="1002" y="452" font-size="9.5" fill="#8b949e">then gunzip</text>
+
+  <rect x="840" y="480" width="280" height="66" rx="10" fill="#21262d" stroke="#30363d"/>
+  <text x="980" y="508" text-anchor="middle" font-size="13" font-weight="600" fill="#e6edf3">Readable diff</text>
+  <text x="980" y="526" text-anchor="middle" font-size="11" fill="#8b949e">exists only on this device</text>
+
+  <!-- Cross-column edges -->
+  <line x1="340" y1="383" x2="446" y2="383" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <text x="393" y="374" text-anchor="middle" font-size="9.5" fill="#79c0ff">uploads</text>
+
+  <path d="M730,240 C 780,240 780,123 836,123" fill="none" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <text x="783" y="200" text-anchor="middle" font-size="9.5" fill="#79c0ff">wrapped key</text>
+
+  <line x1="730" y1="383" x2="836" y2="383" stroke="#58a6ff" stroke-width="1.5" marker-end="url(#arrowBlue)"/>
+  <text x="783" y="374" text-anchor="middle" font-size="9.5" fill="#79c0ff">sealed diff</text>
+
+  <!-- Legend -->
+  <circle cx="440" cy="582" r="6" fill="#0d2a3d" stroke="#58a6ff"/>
+  <text x="456" y="586" font-size="11" fill="#c9d1d9">Sealed &#8212; unreadable to anyone between the two ends</text>
+
+  <circle cx="368" cy="604" r="6" fill="#21262d" stroke="#30363d"/>
+  <text x="384" y="608" font-size="11" fill="#c9d1d9">Key material or plaintext &#8212; only ever on your own hardware</text>
+</svg>

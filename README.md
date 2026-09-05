@@ -8,6 +8,8 @@ It ships as a single Go binary with two entrypoints: a native macOS menu bar app
 
 It only ever opens outbound connections. It never listens for inbound traffic and never writes to the repositories it watches.
 
+Sign up at [treehouse.cloptima.ai](https://treehouse.cloptima.ai) before running this — that's what you open on your phone or in a browser to see what it reports.
+
 ## How it works
 
 - **Watch.** `internal/watch` uses fsnotify on each tracked repo's working tree and `.git` refs, with a 3-second debounce.
@@ -74,32 +76,8 @@ envelope = AES-256-GCM(key = KEK, nonce = random 12 bytes, plaintext = MCK)
 
 The reader's public key is a 65-byte uncompressed SEC1 P-256 point, base64url-encoded without padding — the exact form WebCrypto's raw key export produces, so the Go and browser sides agree on wire format without a translation layer.
 
-```mermaid
-flowchart LR
-  subgraph daemon["This daemon (per machine)"]
-    MCK["MCK\n32 random bytes\nkept in OS keychain"]
-    KWT["K_wt\nHKDF-SHA256(MCK, epoch, repo+worktree path)"]
-    SEALED["Sealed diff\nversion, epoch, nonce, ciphertext"]
-    MCK --> KWT --> SEALED
-  end
-
-  subgraph server["Cloptima (relay only)"]
-    WRAPPED["Wrapped MCK\none envelope per reader device"]
-    RELAYED["Sealed diffs\nciphertext only"]
-  end
-
-  subgraph reader["Reader device (browser)"]
-    DKEY["Device key pair (P-256)\nWebCrypto, non-extractable"]
-    MCK2["MCK, recovered\nvia ECDH unwrap"]
-    KWT2["K_wt\nsame HKDF derivation"]
-    PLAIN["Diff JSON\nAES-256-GCM open, gunzip"]
-    DKEY --> MCK2 --> KWT2 --> PLAIN
-  end
-
-  SEALED -->|push| RELAYED
-  WRAPPED -->|fetch, unwrap locally| DKEY
-  RELAYED -->|fetch, open locally| KWT2
-```
+![Key derivation, sealing, and grant flow across the daemon, Cloptima's relay, and a reader device](assets/key-flow-dark.svg#gh-dark-mode-only)
+![Key derivation, sealing, and grant flow across the daemon, Cloptima's relay, and a reader device](assets/key-flow-light.svg#gh-light-mode-only)
 
 Granting is asynchronous per machine — each one wraps and re-pushes on its own next check-in, so enrollment order across multiple machines never matters:
 
@@ -166,7 +144,11 @@ go build -trimpath -ldflags "-s -w" -o treehouse ./cmd/treehouse
 
 ## Getting Started
 
-### 1. Authenticate
+### 1. Sign up
+
+Create an account at [treehouse.cloptima.ai](https://treehouse.cloptima.ai).
+
+### 2. Authenticate this machine
 
 ```bash
 treehouse login
@@ -178,13 +160,13 @@ Or pair a headless machine via device code / QR code:
 treehouse pair
 ```
 
-### 2. Track Repositories
+### 3. Track Repositories
 
 ```bash
 treehouse add /path/to/my-project
 ```
 
-### 3. Run the Daemon
+### 4. Run the Daemon
 
 The menu bar app starts the daemon automatically. From a terminal:
 
