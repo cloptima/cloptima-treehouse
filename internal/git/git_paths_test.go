@@ -125,7 +125,7 @@ func TestRunGitDistinguishesDifferencesFromFailure(t *testing.T) {
 	runGitOrFail(t, dir, "commit", "-qm", "seed")
 	writeFile(t, dir, "a.txt", "two\n")
 
-	out, err := runGit(dir, "diff", "--numstat", "--", literalPathspec("a.txt"))
+	out, err := runGit(dir, "diff", "--numstat", "--", "a.txt")
 	if err != nil {
 		t.Fatalf("a diff with differences must not be an error: %v", err)
 	}

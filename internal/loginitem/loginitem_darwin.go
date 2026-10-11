@@ -7,6 +7,8 @@
 package loginitem
 
 /*
+// Compile shim_darwin.c as Objective-C explicitly: a .m suffix makes Go add
+// a second -lobjc when systray is linked (golang/go#67799).
 #cgo CFLAGS: -x objective-c -fobjc-arc -mmacosx-version-min=13.0
 #cgo LDFLAGS: -framework Foundation -framework ServiceManagement
 #include <stdlib.h>

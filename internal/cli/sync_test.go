@@ -12,14 +12,38 @@ import (
 )
 
 // newTestSyncer swaps the network call for a recorder so the concurrency
-// behaviour can be observed without a server.
+// behaviour can be observed without a server. The coalescing wait is off;
+// TestRepoSyncerFoldsTriggersThatLandTogether covers it.
 func newTestSyncer(run func()) *repoSyncer {
 	s := newRepoSyncer("", "", "", "", nil, nil)
+	s.coalesce = 0
 	s.syncFn = func() error {
 		run()
 		return nil
 	}
 	return s
+}
+
+// A commit fires every worktree watcher of a repo within milliseconds. The
+// first trigger used to start a full sync at once and the rest queued a
+// second one that found nothing new.
+func TestRepoSyncerFoldsTriggersThatLandTogether(t *testing.T) {
+	var runs int32
+	syncer := newTestSyncer(func() {
+		atomic.AddInt32(&runs, 1)
+		time.Sleep(20 * time.Millisecond)
+	})
+	syncer.coalesce = 200 * time.Millisecond
+
+	for range 5 {
+		syncer.Trigger()
+		time.Sleep(5 * time.Millisecond)
+	}
+	waitForIdle(t, syncer)
+
+	if got := atomic.LoadInt32(&runs); got != 1 {
+		t.Fatalf("expected one sync for triggers 5 ms apart, got %d", got)
+	}
 }
 
 // Every worktree of a repo gets its own watcher with its own debounce timer,

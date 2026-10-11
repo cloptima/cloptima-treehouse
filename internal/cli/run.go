@@ -675,12 +675,31 @@ func watchRepoWithSyncer(stop <-chan struct{}, syncer *repoSyncer, repoPath stri
 	watchers := make(map[string]*watch.Watcher)
 	triggerSync := syncer.Trigger
 
+	// A poll runs `git worktree list` only when the stat-only stamp of the
+	// worktree registrations moved, or when the last pass did not finish.
+	// Listing on every poll cost two processes a minute per repo, forever.
+	// Without a common dir there is no stamp, and every poll lists.
+	commonDir, err := git.CommonDir(repoPath)
+	if err != nil {
+		log.Printf("treehouse: failed to find the git dir of %s: %v", repoPath, err)
+	}
+	stamp, listed := "", false
+
 	reconcile := func() {
+		var next string
+		if commonDir != "" {
+			next = git.WorktreesStamp(commonDir)
+			if listed && next == stamp {
+				return
+			}
+		}
 		worktreePaths, err := git.ListWorktrees(repoPath)
 		if err != nil {
 			log.Printf("treehouse: failed to list worktrees for %s: %v", repoPath, err)
+			listed = false
 			return
 		}
+		complete := true
 		current := make(map[string]bool, len(worktreePaths))
 		for _, wtPath := range worktreePaths {
 			current[wtPath] = true
@@ -690,6 +709,7 @@ func watchRepoWithSyncer(stop <-chan struct{}, syncer *repoSyncer, repoPath stri
 			w, err := watch.New(wtPath, triggerSync)
 			if err != nil {
 				log.Printf("treehouse: failed to watch %s: %v", wtPath, err)
+				complete = false
 				continue
 			}
 			watchers[wtPath] = w
@@ -702,6 +722,7 @@ func watchRepoWithSyncer(stop <-chan struct{}, syncer *repoSyncer, repoPath stri
 			_ = w.Close()
 			delete(watchers, wtPath)
 		}
+		stamp, listed = next, complete
 	}
 
 	// reconcile() runs only from this goroutine (the initial call below and
@@ -813,6 +834,11 @@ type repoSyncer struct {
 	// tests replace it to observe the concurrency behaviour without a server.
 	syncFn func() error
 
+	// coalesce is how long a run waits before it reads git state, so that
+	// triggers landing together fold into it. Production uses
+	// triggerCoalesce.
+	coalesce time.Duration
+
 	// stop closes when this repo is unwatched or the daemon shuts down. Held
 	// so a backoff wait can be interrupted rather than pinning a goroutine
 	// past the daemon's own lifetime.
@@ -835,6 +861,13 @@ type repoSyncer struct {
 	notBefore           time.Time
 	consecutiveFailures int
 }
+
+// triggerCoalesce folds triggers that land together into one run. Every
+// worktree's watcher sees the same ref change, so a commit in a repo with
+// several worktrees fires them all within milliseconds. Without the wait the
+// first started a full sync and the rest queued a second one that found
+// nothing new.
+const triggerCoalesce = time.Second
 
 // Backoff bounds for a repo that keeps failing.
 //
@@ -901,11 +934,15 @@ func (s *repoSyncer) waitForBackoff() bool {
 	s.mu.Lock()
 	wait := time.Until(s.notBefore)
 	s.mu.Unlock()
-	if wait <= 0 {
+	return s.sleep(wait)
+}
+
+// sleep waits for d, and reports false if the repo is stopped first.
+func (s *repoSyncer) sleep(d time.Duration) bool {
+	if d <= 0 {
 		return true
 	}
-
-	timer := time.NewTimer(wait)
+	timer := time.NewTimer(d)
 	defer timer.Stop()
 	select {
 	case <-timer.C:
@@ -966,6 +1003,7 @@ func newRepoSyncer(apiGatewayURL, token, machineName, repoPath string, identity 
 		repoPath:      repoPath,
 		identity:      identity,
 		stop:          stop,
+		coalesce:      triggerCoalesce,
 	}
 	s.syncFn = s.sync
 	return s
@@ -991,12 +1029,17 @@ func (s *repoSyncer) run() {
 		// Held off before the attempt, not after it, so a trigger arriving
 		// during a backoff is coalesced into the one delayed run rather than
 		// each becoming its own.
-		if !s.waitForBackoff() {
+		if !s.waitForBackoff() || !s.sleep(s.coalesce) {
 			s.mu.Lock()
 			s.running, s.pending = false, false
 			s.mu.Unlock()
 			return
 		}
+		// The sync below reads git state after every trigger that landed
+		// during the waits, so those triggers are already covered.
+		s.mu.Lock()
+		s.pending = false
+		s.mu.Unlock()
 
 		err := s.syncFn()
 		s.noteResult(err)

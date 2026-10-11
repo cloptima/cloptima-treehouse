@@ -1,8 +1,9 @@
 module github.com/cloptima/cloptima-treehouse
 
-go 1.25.7
+go 1.27.1
 
 require (
+	github.com/fsnotify/fsevents v0.2.0
 	github.com/fsnotify/fsnotify v1.9.0
 	// Imported directly by internal/tray/tray_darwin.go, which builds only
 	// under `darwin && cgo && !notray` -- `go mod tidy` run on any other
