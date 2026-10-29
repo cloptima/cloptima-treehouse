@@ -15,7 +15,7 @@ Sign up at [treehouse.cloptima.ai](https://treehouse.cloptima.ai) before running
 - **Watch.** `internal/watch` uses fsnotify on each tracked repo's working tree and `.git` refs, with a 3-second debounce.
 - **Diff.** `internal/git` shells out to the local `git` binary (read-only) to compute branch, ahead/behind, staged/unstaged file status, and patch text.
 - **Seal.** `internal/crypto` and `internal/payload` seal the diff and apply size limits before anything leaves the machine — see [Encryption](#encryption) below.
-- **Push.** `internal/ingest` POSTs the sealed snapshot to `/v1/treehouse/ingest`, bearer-authenticated with an access token scoped to this machine. Cloptima relays the sealed bytes end to end — it never receives a diff in the clear and never holds a key that could open one.
+- **Push.** `internal/ingest` POSTs the sealed snapshot to `/v1/treehouse/daemon/ingest`, bearer-authenticated with an access token scoped to this machine. Cloptima relays the sealed bytes end to end — it never receives a diff in the clear and never holds a key that could open one.
 - **Retry.** A failed push backs off (30s doubling to a 6-minute ceiling, or whatever `Retry-After` the server sends) rather than retrying on every debounce tick. A 5-minute heartbeat, jittered per repo, keeps an idle machine distinguishable from a dead one.
 
 One daemon runs per machine, enforced by an exclusive lock file (`~/.treehouse/daemon.lock`) beside its config.

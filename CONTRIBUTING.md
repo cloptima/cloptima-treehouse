@@ -24,7 +24,7 @@ These are the same checks CI runs on every PR.
 - `internal/cli` — command surface (`login`, `pair`, `add`, `run`, `version`, ...)
 - `internal/crypto` — key derivation and diff sealing
 - `internal/git` — local git shellouts (read-only)
-- `internal/ingest` — wire client for `/v1/treehouse/ingest`
+- `internal/ingest` — wire client for `/v1/treehouse/daemon/ingest`
 - `internal/watch` — fsnotify-based worktree watcher
 - `internal/config`, `internal/auth`, `internal/tray`, `internal/update`, `internal/payload`, `internal/loginitem` — supporting packages
 

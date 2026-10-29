@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/ecdh"
@@ -9,6 +10,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -115,5 +118,38 @@ func TestMalformedCredentialEnvelopesAreRejected(t *testing.T) {
 	empty := &DeviceAuthorization{}
 	if _, err := empty.open(valid); err == nil {
 		t.Fatal("an authorization with no key must not claim to open anything")
+	}
+}
+
+// API Gateway serves the device flow under /v1/treehouse/daemon; the API
+// contract owns the rest of /v1/treehouse, so the old paths answer 404.
+func TestDeviceFlowCallsTheDaemonRoutes(t *testing.T) {
+	var paths []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/v1/treehouse/daemon/device/start":
+			_, _ = w.Write([]byte(`{"device_code":"dc","user_code":"CDFG-HJKM","expires_in":600,"interval":1}`))
+		case "/v1/treehouse/daemon/device/token":
+			_, _ = w.Write([]byte(`{"status":"pending"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	authorization, err := StartDeviceAuthorization(server.URL, "build-box", "11111111-1111-4111-8111-111111111111")
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	_, _, status, err := pollOnce(context.Background(), server.Client(), server.URL, authorization.DeviceCode)
+	if err != nil || status != "pending" {
+		t.Fatalf("poll = %q, %v; want pending", status, err)
+	}
+
+	want := []string{"POST /v1/treehouse/daemon/device/start", "POST /v1/treehouse/daemon/device/token"}
+	if strings.Join(paths, ",") != strings.Join(want, ",") {
+		t.Fatalf("called %v, want %v", paths, want)
 	}
 }

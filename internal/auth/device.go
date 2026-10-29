@@ -108,7 +108,7 @@ func StartDeviceAuthorization(apiGatewayURL, machineName, machineInstanceID stri
 		return nil, fmt.Errorf("encode device request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, apiGatewayURL+"/v1/treehouse/device/start", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, apiGatewayURL+"/v1/treehouse/daemon/device/start", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("build device request: %w", err)
 	}
@@ -254,7 +254,7 @@ func pollOnce(ctx context.Context, client *http.Client, apiGatewayURL, deviceCod
 		return "", "", "", fmt.Errorf("encode device poll: %w", err)
 	}
 	req, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, apiGatewayURL+"/v1/treehouse/device/token", bytes.NewReader(body))
+		ctx, http.MethodPost, apiGatewayURL+"/v1/treehouse/daemon/device/token", bytes.NewReader(body))
 	if err != nil {
 		return "", "", "", fmt.Errorf("build device poll: %w", err)
 	}

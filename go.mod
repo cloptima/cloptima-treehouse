@@ -1,6 +1,6 @@
 module github.com/cloptima/cloptima-treehouse
 
-go 1.27.1
+go 1.27.3
 
 require (
 	github.com/fsnotify/fsevents v0.2.0
@@ -9,12 +9,9 @@ require (
 	// under `darwin && cgo && !notray` -- `go mod tidy` run on any other
 	// platform cannot see that import and demotes this to indirect.
 	github.com/getlantern/systray v1.2.2
+	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.1
 	github.com/zalando/go-keyring v0.2.6
-)
-
-require (
-	github.com/google/uuid v1.6.0
 	rsc.io/qr v0.2.0
 )
 

@@ -22,6 +22,7 @@ import (
 
 type recordingServer struct {
 	*httptest.Server
+	path     string
 	encoding string
 	body     []byte
 }
@@ -30,6 +31,7 @@ func newRecordingServer(t *testing.T) *recordingServer {
 	t.Helper()
 	rec := &recordingServer{}
 	rec.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.path = r.URL.Path
 		rec.encoding = r.Header.Get("Content-Encoding")
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -110,6 +112,11 @@ func TestPushSendsUncompressed(t *testing.T) {
 	}
 	if rec.encoding != "" {
 		t.Fatalf("expected no Content-Encoding, got %q", rec.encoding)
+	}
+	// API Gateway serves the daemon routes under /v1/treehouse/daemon; the API
+	// contract owns the rest of /v1/treehouse.
+	if rec.path != "/v1/treehouse/daemon/ingest" {
+		t.Fatalf("pushed to %q, want /v1/treehouse/daemon/ingest", rec.path)
 	}
 
 	var decoded RepoSnapshotPayload

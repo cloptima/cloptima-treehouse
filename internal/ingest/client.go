@@ -1,5 +1,5 @@
 // Package ingest pushes a repo snapshot to the server's
-// /v1/treehouse/ingest endpoint.
+// /v1/treehouse/daemon/ingest endpoint.
 package ingest
 
 import (
@@ -316,7 +316,7 @@ func Push(apiGatewayURL, token string, snapshot RepoSnapshotPayload) (Response, 
 			len(body), payload.MaxTransportBytes)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, apiGatewayURL+"/v1/treehouse/ingest", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, apiGatewayURL+"/v1/treehouse/daemon/ingest", bytes.NewReader(body))
 	if err != nil {
 		return result, fmt.Errorf("build request: %w", err)
 	}
